@@ -6,7 +6,6 @@ Streamlit web interface
 import os
 import sys
 import math
-import torch
 import streamlit as st
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -261,8 +260,9 @@ hr {
 
 # ── Load model ────────────────────────────────────────────────────────────
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def load_model():
+    import torch  # lazy import — only happens once, cached after
     from src.tokenizer import BPETokenizer
     from src.model import MiniGPT, GPTConfig
 
@@ -287,6 +287,7 @@ def load_model():
 
 
 def run_generate(model, tokenizer, prompt, max_tokens, temperature, top_k, greedy):
+    import torch  # lazy import
     ids = tokenizer.encode(prompt) or [0]
     t   = torch.tensor([ids], dtype=torch.long)
     temp = 0.0 if greedy else temperature

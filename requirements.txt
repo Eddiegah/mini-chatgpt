@@ -1,5 +1,4 @@
---find-links https://download.pytorch.org/whl/cpu/torch_stable.html
-torch==2.3.1+cpu
 numpy==1.26.4
 regex==2024.5.15
 streamlit==1.35.0
+torch==2.3.1
