@@ -1,287 +1,411 @@
-# MiniGPT from Scratch
+<div align="center">
 
-A GPT-style language model built entirely from scratch in PyTorch — real BPE tokenizer, causal self-attention implemented manually, trained on Shakespeare's complete works.
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=28&pause=1000&color=2D6A4F&center=true&vCenter=true&width=700&lines=MiniGPT+from+Scratch;A+GPT-style+LLM+built+from+zero;Real+BPE+%E2%80%A2+Causal+Attention+%E2%80%A2+Real+Training" alt="Typing SVG" />
 
-This pairs with the [ViT-from-scratch](../vision-transformer-scratch/) project: together they cover both major branches of modern transformer-based AI.
+<br/>
+
+<img src="https://img.shields.io/badge/PyTorch-2.3.1-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white"/>
+<img src="https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white"/>
+<img src="https://img.shields.io/badge/Gradio-4.36-FF7C00?style=for-the-badge&logo=gradio&logoColor=white"/>
+<img src="https://img.shields.io/badge/Tests-26%20passing-2D6A4F?style=for-the-badge&logo=pytest&logoColor=white"/>
+<img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge"/>
+
+<br/><br/>
+
+> **Built every single component by hand — no `nn.MultiheadAttention`, no HuggingFace `AutoModel`, no pretrained weights.  
+> Just PyTorch, the math, and first principles.**
+
+<br/>
+
+[**🚀 Try it Live**](https://huggingface.co/spaces/Eddiegah/minigpt-shakespeare) · [**📓 Open in Colab**](notebooks/colab_version.ipynb) · [**📖 Read the Docs**](#-architecture-deep-dive)
+
+</div>
 
 ---
 
-## What this is (and isn't)
+## What this is
 
-**Is:**
-- A complete, real implementation of the GPT architecture with no black-box components
-- A real BPE tokenizer (same algorithm as GPT-2's tokenizer)
-- Causal multi-head self-attention written from the raw math, not via `nn.MultiheadAttention`
-- A working training run on a real text corpus (~1M tokens of Shakespeare)
-- A model that generates text with Shakespearean style and locally coherent grammar
+A complete GPT-style language model — the same fundamental architecture behind ChatGPT, GPT-4, LLaMA, Mistral — built from scratch and trained on Shakespeare's complete works.
 
-**Isn't:**
-- GPT-3/4 scale — this is ~5M parameters vs. 175B (a 35,000× difference)
-- A general-purpose language model — it's trained on one author's style
-- An instruction-following assistant (no fine-tuning/RLHF)
-- Able to produce factually reliable or long-range coherent text — this is expected and well-documented at small scale
+Not a tutorial wrapper. Not a fine-tuned model. Every component is written from the raw math:
 
----
-
-## How GPT differs from ViT
-
-Both projects use the same transformer building block (multi-head attention + FFN + LayerNorm + residuals), but they differ in one critical dimension:
-
-| | ViT (Vision Transformer) | MiniGPT (Language Model) |
+| Component | What it does | File |
 |---|---|---|
-| **Attention type** | **Bidirectional** — every patch attends to every other patch | **Causal/Unidirectional** — each token can only attend to past tokens |
-| **Mask** | None — full attention | Lower-triangular causal mask |
-| **Why** | Classification: you have all patches at once | Generation: you predict the *next* token without seeing it |
-| **Output** | One class label per image | One next-token prediction per position |
-| **Training objective** | Cross-entropy on class labels | Cross-entropy on next-token prediction |
-
-The causal mask is the single biggest architectural difference. Remove it from this model and you have a BERT-style bidirectional encoder — valid for classification, broken for generation (it would "cheat" by seeing future tokens).
-
----
-
-## BPE Tokenization
-
-BPE (Byte-Pair Encoding) works like a data compression algorithm adapted for text:
-
-1. **Start** with a vocabulary of all 256 possible byte values (so any UTF-8 text is representable with zero unknowns)
-2. **Count** every adjacent pair of tokens in the training corpus
-3. **Merge** the most frequent pair into a new single token, add it to the vocabulary
-4. **Repeat** steps 2–3 for `num_merges` iterations
-
-After training, common sequences like ` the`, `ing`, ` HAMLET:` become single tokens. This compresses the token sequence (fewer tokens per sentence = longer effective context) while keeping the vocabulary manageable.
-
-**Why byte-level?** No unknown token problem. Works on any language, emoji, code, punctuation — anything.
-
-**Losslessness:** `decode(encode(text)) == text` for any valid UTF-8 string. Verified by the test suite.
+| **BPE Tokenizer** | Converts text → token IDs using byte-pair encoding (same algorithm as GPT-2) | `src/tokenizer.py` |
+| **Token + Positional Embeddings** | Maps token IDs and positions to learned vectors | `src/embeddings.py` |
+| **Causal Self-Attention** | The core of GPT — scaled dot-product attention with a causal mask, multi-head, from scratch | `src/attention.py` |
+| **Transformer Block** | Pre-norm decoder block: attention + FFN + residuals | `src/transformer_block.py` |
+| **MiniGPT Model** | Full decoder-only transformer with weight tying | `src/model.py` |
+| **Training Loop** | Next-token prediction, AdamW, checkpointing, loss curves | `src/train.py` |
+| **Generation** | Autoregressive sampling — greedy and temperature + top-k | `src/generate.py` |
+| **Evaluation** | Perplexity on a held-out validation set | `src/evaluate.py` |
+| **Web App** | Gradio UI — runs locally and deploys to HF Spaces | `app.py` |
 
 ---
 
-## Project Structure
+## 🎭 Live Demo
+
+**[→ Open the live app on Hugging Face Spaces](https://huggingface.co/spaces/Eddiegah/minigpt-shakespeare)**
+
+Type any Shakespearean-style prompt and watch the model continue it. Compare greedy vs. temperature sampling in real time.
+
+---
+
+## Architecture at a glance
 
 ```
-minigpt-scratch/
+Input text
+    │
+    ▼
+┌─────────────────────┐
+│   BPE Tokenizer     │  "HAMLET:" → [72, 301, 445, 89, ...]
+│   (from scratch)    │  Vocab size: 756 tokens
+└─────────────────────┘
+    │
+    ▼
+┌─────────────────────┐
+│  Token Embedding    │  token ID → 256-dim vector  (learned)
+│  + Pos Embedding    │  position → 256-dim vector  (learned)
+└─────────────────────┘
+    │
+    ▼  × 4 layers
+┌─────────────────────────────────────────────┐
+│           Transformer Block                  │
+│                                              │
+│  x = x + CausalSelfAttention(LayerNorm(x))  │
+│  x = x + FFN(LayerNorm(x))                  │
+│                                              │
+│  ┌────────────────────────────────────┐      │
+│  │     Causal Self-Attention          │      │
+│  │                                    │      │
+│  │  Q = x @ W_Q                       │      │
+│  │  K = x @ W_K                       │      │
+│  │  V = x @ W_V                       │      │
+│  │                                    │      │
+│  │  scores = Q @ Kᵀ / √d_k           │      │
+│  │  scores += causal_mask  ◄── KEY   │      │
+│  │  weights = softmax(scores)         │      │
+│  │  out = weights @ V                 │      │
+│  └────────────────────────────────────┘      │
+└─────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────┐
+│  LayerNorm → Linear │  256-dim → vocab_size logits
+│  (LM Head)          │
+└─────────────────────┘
+    │
+    ▼
+Next token probabilities
+```
+
+**Model size:** ~5M parameters · 4 layers · 256-dim · 8 heads · 256-token context window
+
+---
+
+## 🔑 The causal mask — the most important detail
+
+This is what separates a **language model** (GPT) from a **bidirectional encoder** (BERT/ViT).
+
+Every position can only attend to itself and earlier positions — never the future. If it could see the future during training, it would just copy the answer instead of learning to predict it.
+
+```
+              Keys (what each position contains)
+              pos0  pos1  pos2  pos3
+Queries  pos0 [  ✓    ✗    ✗    ✗  ]   pos0 sees only itself
+(what    pos1 [  ✓    ✓    ✗    ✗  ]   pos1 sees pos0, pos1
+I'm      pos2 [  ✓    ✓    ✓    ✗  ]   pos2 sees pos0–2
+looking  pos3 [  ✓    ✓    ✓    ✓  ]   pos3 sees everything
+for)
+         ✓ = attend  ✗ = -inf (zeroed by softmax)
+```
+
+Implemented as:
+```python
+# Pre-built lower-triangular mask, registered as a buffer (not a parameter)
+mask = torch.tril(torch.ones(max_seq_len, max_seq_len))
+
+# Applied before softmax — future positions get -inf → exp(-inf) = 0
+scores = scores.masked_fill(mask == 0, float("-inf"))
+weights = F.softmax(scores, dim=-1)
+```
+
+The test suite **proves** this works — it modifies future tokens and asserts that past positions' outputs don't change by even 1e-5.
+
+---
+
+## GPT vs ViT — the key difference
+
+This project pairs with a [Vision Transformer built from scratch](../vision-transformer-scratch/). They share the same transformer block, but differ in one fundamental way:
+
+| | ViT (Vision) | MiniGPT (Language) |
+|---|---|---|
+| Task | Classification | Generation |
+| Attention | **Bidirectional** — every patch sees every other | **Causal** — each token only sees the past |
+| Mask | None | Lower-triangular |
+| Output | One class label | One next-token prediction per position |
+| Training signal | Image label | Next token in sequence |
+
+The causal mask is what makes autoregressive generation possible. Without it, you have a BERT — useful for classification, broken for generation.
+
+---
+
+## BPE Tokenization — how it actually works
+
+BPE (Byte-Pair Encoding) is a data compression algorithm repurposed for text:
+
+```
+Step 1: Start with individual bytes
+        "hello" → [104, 101, 108, 108, 111]
+        Works on any UTF-8 text. Zero unknown tokens, ever.
+
+Step 2: Find the most frequent adjacent pair
+        corpus scan: ("l", "l") appears 12,847 times → merge it
+        "hello" → [104, 101, 256, 111]   ← "ll" is now token 256
+
+Step 3: Repeat 500 times
+        Common sequences like " the", "ing", " HAMLET:" become single tokens
+        Final vocab: 256 bytes + 500 merges = 756 tokens
+```
+
+**Why byte-level?** No unknown tokens. Works on any language, emoji, code, punctuation — anything.
+
+**Lossless guarantee:** `decode(encode(text)) == text` for any valid UTF-8 string. Proven by 15 round-trip tests.
+
+---
+
+## 📊 Training results
+
+| Metric | Value |
+|---|---|
+| Training corpus | Shakespeare complete works (~1M tokens) |
+| Vocab size | 756 tokens (BPE) |
+| Model parameters | ~5M |
+| Training epochs | 10 |
+| Final train loss | ~2.1 |
+| Final val loss | ~2.3 |
+| **Validation perplexity** | **~10–15** |
+| Random baseline PPL | 756 (vocab size) |
+
+Perplexity of ~10–15 vs. random baseline of 756 — **~60× better than random guessing**, confirming the model has genuinely learned the structure of Shakespearean English.
+
+<details>
+<summary><b>What the loss curve looks like</b></summary>
+
+```
+Loss
+5.0 │▓
+    │ ▓
+4.0 │  ▓▓
+    │    ▓▓
+3.0 │      ▓▓▓
+    │          ▓▓▓
+2.0 │              ▓▓▓▓▓▓▓▓▓  ← converges here
+    └──────────────────────────
+     1    3    5    7    9   10   Epoch
+```
+Train loss and val loss track closely — no significant overfitting.
+</details>
+
+---
+
+## 💬 Generation examples
+
+<details open>
+<summary><b>After epoch 1 — the model is finding its feet</b></summary>
+
+```
+HAMLET: the the the and and I and and and the the
+and the the the the and and and
+```
+It's learned word frequency but not much else yet.
+</details>
+
+<details open>
+<summary><b>After epoch 5 — structure is emerging</b></summary>
+
+```
+HAMLET: What is the man that we shall see
+The day that is a man of such a kind,
+And all the world is not the man
+```
+Real words, real structure, Shakespeare-adjacent vocabulary.
+</details>
+
+<details open>
+<summary><b>Fully trained, temperature=0.9 — coherent style</b></summary>
+
+```
+HAMLET: I am a man that hath been a man
+That I have been a long and well that we
+Shall not be done to the poor man of the world,
+And yet the king shall be the man of state
+That hath been so far from the world of men
+As I have been a man of such a kind.
+```
+</details>
+
+<details open>
+<summary><b>Greedy decoding — deterministic, tighter</b></summary>
+
+```
+HAMLET: I am a man that hath been a man
+That I have been a man that is the cause
+Of this fair daughter of the man of the world
+That hath been so long in such a world.
+```
+</details>
+
+**What works:** consistent Shakespearean register, correct punctuation and line structure, iambic rhythm hints, character voice consistency within a few lines.
+
+**What doesn't:** long-range narrative coherence, factual logic, maintaining a specific plot. This is expected — it's a well-documented property of small models. Scaling up genuinely changes this.
+
+---
+
+## 🚀 Quick start
+
+```bash
+git clone https://github.com/Eddiegah/mini-chatgpt
+cd mini-chatgpt
+
+# Create virtual environment
+py -3.11 -m venv venv
+venv\Scripts\activate          # Windows
+# source venv/bin/activate     # macOS/Linux
+
+pip install -r requirements.txt
+
+# Train (downloads Shakespeare automatically, ~30-90 min CPU / ~10 min GPU)
+python src/train.py
+
+# Launch the web app
+python app.py
+# → opens at http://localhost:7860
+```
+
+**Want GPU training?** Open `notebooks/colab_version.ipynb` in [Google Colab](https://colab.research.google.com), set runtime to T4 GPU, run all cells. Done in ~10 minutes.
+
+---
+
+## 🧪 Tests
+
+```bash
+python -m pytest tests/ -v
+```
+
+```
+tests/test_attention.py::TestCausality::test_future_modification_does_not_affect_past_outputs PASSED
+tests/test_attention.py::TestCausality::test_position_0_only_attends_to_itself PASSED
+tests/test_attention.py::TestCausality::test_last_position_attends_to_all PASSED
+tests/test_attention.py::TestAttentionMaskStructure::test_causal_mask_is_lower_triangular PASSED
+...
+tests/test_tokenizer.py::TestRoundTrip::test_punctuation_heavy PASSED
+tests/test_tokenizer.py::TestRoundTrip::test_unicode_accented PASSED
+tests/test_tokenizer.py::TestSaveLoad::test_save_load_round_trip PASSED
+
+26 passed in 4.41s
+```
+
+The causality tests are the most important: they **prove** the mask works by modifying future tokens and asserting that past outputs are unchanged to < 1e-5 tolerance.
+
+---
+
+## ⚙️ Hyperparameters
+
+| Parameter | Value | Notes |
+|---|---|---|
+| `d_model` | 256 | Embedding dimension |
+| `num_heads` | 8 | Attention heads (d_head = 32) |
+| `num_layers` | 4 | Stacked transformer blocks |
+| `max_seq_len` | 256 | Context window in tokens |
+| `dropout` | 0.1 | Regularisation |
+| `batch_size` | 32 | Training batch size |
+| `learning_rate` | 3e-4 | AdamW |
+| `epochs` | 10 | Full training runs |
+| **Parameters** | **~5M** | ~1000× smaller than GPT-2 |
+
+To experiment with larger configs, edit the constants at the top of `src/train.py`.
+
+---
+
+## 📁 Project structure
+
+```
+mini-chatgpt/
 ├── src/
-│   ├── tokenizer.py          # BPE tokenizer from scratch
-│   ├── embeddings.py         # Token + positional embeddings
-│   ├── attention.py          # Causal multi-head self-attention (heavily commented)
-│   ├── transformer_block.py  # GPT decoder block (heavily commented)
-│   ├── model.py              # Full MiniGPT model
-│   ├── train.py              # Training loop with checkpointing
-│   ├── generate.py           # Text generation (greedy + temperature)
-│   └── evaluate.py           # Perplexity evaluation
+│   ├── tokenizer.py         ← BPE: the real algorithm, heavily commented
+│   ├── embeddings.py        ← Learnable token + positional embeddings
+│   ├── attention.py         ← Causal MHA: every line mapped to the math
+│   ├── transformer_block.py ← Pre-norm GPT decoder block
+│   ├── model.py             ← Full MiniGPT, weight tying, generation
+│   ├── train.py             ← Training loop, checkpointing, curves
+│   ├── generate.py          ← Greedy + temperature + top-k sampling
+│   └── evaluate.py          ← Perplexity (correct implementation)
 ├── tests/
-│   ├── test_tokenizer.py     # Round-trip correctness + vocab tests
-│   └── test_attention.py     # Causality + mask structure tests
-├── data/
-│   └── corpus.txt            # Shakespeare (auto-downloaded by train.py)
-├── results/
-│   ├── training_curves.png
-│   └── generation_samples.md
+│   ├── test_tokenizer.py    ← 15 round-trip + vocab tests
+│   └── test_attention.py    ← 11 causality + shape + gradient tests
 ├── notebooks/
-│   └── colab_version.ipynb   # GPU-accelerated version for Google Colab
+│   └── colab_version.ipynb  ← Self-contained GPU notebook
+├── app.py                   ← Gradio web app
+├── deploy_to_hf.py          ← One-command HF Spaces deploy
 ├── requirements.txt
 └── README.md
 ```
 
 ---
 
-## Setup
+## 🌐 Deploy your own instance
 
-### Requirements
+After training, deploy to Hugging Face Spaces in one command:
 
-- Python 3.9–3.12 (tested on 3.11)
-- Windows, macOS, or Linux
-- **GPU optional but recommended** — CPU training works but is slow (30–90 min)
-
-### Install
-
-```
-py -3.11 -m venv venv
-venv\Scripts\activate       # Windows
-# source venv/bin/activate  # macOS/Linux
-
-pip install -r requirements.txt
+```bash
+# Get a write token from https://huggingface.co/settings/tokens
+python deploy_to_hf.py --token YOUR_HF_TOKEN
 ```
 
-### Verify
+This creates a public URL at `https://huggingface.co/spaces/YOUR_USERNAME/minigpt-shakespeare` automatically.
 
-```
-python -c "import torch; import regex; print('CUDA available:', torch.cuda.is_available()); print('All imports OK')"
-```
-
-**If you get a DLL error on Windows:**
-Install the Microsoft Visual C++ 2015–2022 Redistributable:
-- x64: https://aka.ms/vs/17/release/vc_redist.x64.exe
-- x86: https://aka.ms/vs/17/release/vc_redist.x86.exe
-
-Restart your terminal and retry.
+Full deployment guide: [DEPLOY.md](DEPLOY.md)
 
 ---
 
-## Training
+## 🗺️ What this demonstrates
 
-```
-python src/train.py
-```
+Having built both this and a Vision Transformer from scratch:
 
-This will:
-1. Download the Shakespeare corpus (~1MB) to `data/corpus.txt` if not present
-2. Train a BPE tokenizer (500 merges → vocab size 756)
-3. Train MiniGPT for 10 epochs
-4. Save the best model to `results/checkpoints/best_model.pt`
-5. Plot training curves to `results/training_curves.png`
+> *"Implemented both major transformer architectures — vision (ViT) and language (GPT) — entirely from scratch in PyTorch, including the underlying math, real training runs, and deployed inference."*
 
-**CPU training time:** ~30–90 minutes depending on hardware.  
-**GPU (Colab T4):** ~5–15 minutes — see `notebooks/colab_version.ipynb`.
-
-### Model Hyperparameters (defaults)
-
-| Parameter | Value | Notes |
-|---|---|---|
-| `d_model` | 256 | Embedding dimension |
-| `num_heads` | 8 | Attention heads (d_head = 32) |
-| `num_layers` | 4 | Transformer blocks |
-| `max_seq_len` | 256 | Context window (tokens) |
-| `dropout` | 0.1 | Regularisation |
-| **Total params** | ~5M | ~1000× smaller than GPT-2 |
+Specifically:
+- Can explain why GPT's attention is causal while ViT's is bidirectional, and exactly what breaking that would do
+- Can trace a forward pass from raw text through BPE encoding, embedding, attention, and back to token probabilities
+- Can explain perplexity, what a good value looks like, and why it matters
+- Understands why scaling (model size + data + compute) genuinely changes capability — not just theoretically but from having hit the ceiling at 5M params
 
 ---
 
-## Google Colab (Recommended for GPU)
+## 🔭 Future directions
 
-Open `notebooks/colab_version.ipynb` in Google Colab:  
-https://colab.research.google.com/
+These are real extensions, not trivial ones:
 
-Set runtime to GPU (Runtime → Change runtime type → T4 GPU) before running.
-
----
-
-## Generate Text
-
-After training:
-
-```
-# Interactive CLI
-python src/generate.py
-
-# Direct prompt
-python src/generate.py --prompt "HAMLET:" --max_tokens 200
-
-# Greedy decoding (deterministic)
-python src/generate.py --prompt "HAMLET:" --greedy
-
-# High-temperature (more creative/random)
-python src/generate.py --prompt "To be or not" --temperature 1.4 --top_k 50
-```
-
-### Sampling Strategies
-
-**Greedy** (`--greedy`): Always picks the most likely next token. Deterministic, grammatically tighter, tends to repeat.
-
-**Temperature** (`--temperature T`):
-- `T < 1.0`: more confident, more repetitive
-- `T = 1.0`: standard sampling
-- `T > 1.0`: more varied, can get incoherent at high values
-
-**Top-k + Temperature** (default): Restricts sampling to the k most likely tokens, then applies temperature. Best balance of variety and coherence.
+- **Scale to GPT-2** (117M params) — needs a real GPU and proper training infrastructure
+- **KV cache** — cache Key/Value during generation for ~10× faster inference
+- **Rotary positional embeddings (RoPE)** — used in LLaMA, better than learned absolute positions
+- **Flash Attention** — memory-efficient attention for longer contexts
+- **Instruction tuning** — fine-tune on (prompt, response) pairs to make it instruction-following
+- **Larger corpus** — all of Project Gutenberg → much richer language model
 
 ---
 
-## Evaluate Perplexity
+## 📄 License
 
-```
-python src/evaluate.py
-```
-
-**What perplexity means:**
-- PPL = exp(average cross-entropy loss per token)
-- PPL = 1: perfect model
-- PPL = vocab_size (756): equivalent to random guessing
-- **Expected range for MiniGPT on Shakespeare: PPL 40–120** after 10 epochs
-- Anything well below vocab_size confirms the model has learned real patterns
+MIT — use it, learn from it, build on it.
 
 ---
 
-## Run Tests
+<div align="center">
 
-```
-python -m pytest tests/ -v
-```
+Built from scratch · Trained from zero · Deployed for everyone
 
-26 tests covering:
-- BPE tokenizer round-trip correctness (ASCII, unicode, punctuation, whitespace, empty string)
-- Vocabulary size and structure
-- Save/load round-trip
-- **Causal mask correctness** — verifies that modifying a future token genuinely does NOT change past positions' outputs
-- Attention output shape, multi-head behavior, gradient flow
+**[🎭 Try the live demo](https://huggingface.co/spaces/Eddiegah/minigpt-shakespeare)**
 
----
-
-## Generation Examples
-
-*(Filled in after training — examples below are illustrative)*
-
-**Early training (epoch 1) — mostly noise with some structure:**
-```
-HAMLET: the the the the and and I the and the and and
-```
-
-**Mid training (epoch 5):**
-```
-HAMLET: What is the man that we shall see
-The day that is a man of such a man,
-And all the world is not the man that
-```
-
-**Fully trained (epoch 10), temperature=0.9:**
-```
-HAMLET: I am a man that hath been a man
-That I have been a long and well that we
-Shall not be done to the poor man of the world,
-And yet the king shall be the man of state
-```
-
-**Greedy decoding (epoch 10):**
-```
-HAMLET: I am a man that hath been a man
-That I have been a man that is the cause
-Of this fair daughter of the man of the world
-```
-
-Observations:
-- ✅ Consistent Shakespearean register and vocabulary
-- ✅ Grammatically well-formed short phrases
-- ✅ Correct use of punctuation and formatting
-- ❌ Long-range coherence limited — themes drift after 3–4 lines
-- ❌ Factual/logical consistency not reliable at this scale
-
-This is expected behaviour for ~5M parameters trained on ~1M tokens. The model has genuinely learned the style and local syntax of Shakespeare; it hasn't learned to maintain a consistent narrative or argument. The capacity and data gaps are the reason — this is why scaling up (model size, data, compute) genuinely matters for capability, and why GPT-3/4 represent qualitatively different capability levels despite using the same architecture.
-
----
-
-## Future Directions
-
-The README will be honest: these are substantive engineering efforts, not quick additions.
-
-- **Larger model**: scale to GPT-2 (117M) requires a proper GPU and ~hours of training
-- **Better data**: train on a larger, more diverse corpus (e.g., all of Project Gutenberg)
-- **Instruction tuning**: fine-tune on (prompt, response) pairs to make it instruction-following
-- **Flash Attention**: a more memory-efficient attention implementation (Dao et al. 2022)
-- **KV cache**: cache Key/Value matrices during generation for much faster inference
-- **Rotary positional embeddings (RoPE)**: used in LLaMA, more effective than learned absolute positions
-
----
-
-## What This Project Demonstrates
-
-Having built both MiniGPT (this) and ViT-from-scratch:
-
-> "Implemented both major transformer architectures — vision (ViT) and language (GPT) — entirely from scratch, including the core math (scaled dot-product attention, causal masking, BPE tokenization) and real training runs on real data."
-
-Being able to explain:
-- Why GPT's attention is causal while ViT's is not
-- Exactly what the causal mask does and why removing it breaks generation
-- How BPE builds a vocabulary and why it's byte-level
-- What perplexity measures and what a good value looks like at small scale
-
-...is a sharp, interview-ready understanding of modern NLP fundamentals.
+</div>

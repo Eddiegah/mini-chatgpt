@@ -38,10 +38,13 @@ Usage:
 """
 
 import os
+import sys
 import math
 import torch
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.tokenizer import BPETokenizer
 from src.model import MiniGPT, GPTConfig

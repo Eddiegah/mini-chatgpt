@@ -13,11 +13,15 @@ public domain, well-suited for a small model).
 """
 
 import os
+import sys
 import time
 import torch
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
+
+# Allow running as both `python src/train.py` and `python -m src.train`
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.tokenizer import BPETokenizer
 from src.model import MiniGPT, GPTConfig
