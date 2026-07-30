@@ -229,8 +229,11 @@ causal self-attention implemented manually, trained on Shakespeare's complete wo
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
+    # share=True creates a public gradio.live link (works everywhere, 72h)
+    # On platforms like Render that set PORT, it also binds to 0.0.0.0
     demo.launch(
         server_name="0.0.0.0",
         server_port=port,
+        share=True,
         show_error=True,
     )
