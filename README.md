@@ -6,7 +6,7 @@
 
 <img src="https://img.shields.io/badge/PyTorch-2.3.1-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white"/>
 <img src="https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white"/>
-<img src="https://img.shields.io/badge/Gradio-4.36-FF7C00?style=for-the-badge&logo=gradio&logoColor=white"/>
+<img src="https://img.shields.io/badge/Streamlit-1.35-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white"/>
 <img src="https://img.shields.io/badge/Tests-26%20passing-2D6A4F?style=for-the-badge&logo=pytest&logoColor=white"/>
 <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge"/>
 
@@ -17,7 +17,7 @@
 
 <br/>
 
-[**🚀 Try it Live**](https://huggingface.co/spaces/Eddiegah/minigpt-shakespeare) · [**📓 Open in Colab**](notebooks/colab_version.ipynb) · [**📖 Read the Docs**](#-architecture-deep-dive)
+[**🚀 Try it Live**](https://mini-chatgpt-gbq272rp9elezl3547gctw.streamlit.app) · [**📓 Open in Colab**](notebooks/colab_version.ipynb) · [**📖 Read the Docs**](#-architecture-deep-dive)
 
 </div>
 
@@ -45,7 +45,7 @@ Not a tutorial wrapper. Not a fine-tuned model. Every component is written from 
 
 ## 🎭 Live Demo
 
-**[→ Open the live app on Hugging Face Spaces](https://huggingface.co/spaces/Eddiegah/minigpt-shakespeare)**
+**[→ Open the live app](https://mini-chatgpt-gbq272rp9elezl3547gctw.streamlit.app)**
 
 Type any Shakespearean-style prompt and watch the model continue it. Compare greedy vs. temperature sampling in real time.
 
@@ -356,14 +356,14 @@ mini-chatgpt/
 
 ## 🌐 Deploy your own instance
 
-After training, deploy to Hugging Face Spaces in one command:
+The app is deployed on Streamlit Community Cloud — free, permanent, no credit card.
 
-```bash
-# Get a write token from https://huggingface.co/settings/tokens
-python deploy_to_hf.py --token YOUR_HF_TOKEN
-```
-
-This creates a public URL at `https://huggingface.co/spaces/YOUR_USERNAME/minigpt-shakespeare` automatically.
+To deploy your own fork:
+1. Fork `Eddiegah/mini-chatgpt` on GitHub
+2. Go to https://share.streamlit.io
+3. New app → your repo → `main` → `streamlit_app.py`
+4. In Settings → set Python version to **3.11**
+5. Deploy
 
 Full deployment guide: [DEPLOY.md](DEPLOY.md)
 
@@ -406,6 +406,6 @@ MIT — use it, learn from it, build on it.
 
 Built from scratch · Trained from zero · Deployed for everyone
 
-**[🎭 Try the live demo](https://huggingface.co/spaces/Eddiegah/minigpt-shakespeare)**
+**[🎭 Try the live demo](https://mini-chatgpt-gbq272rp9elezl3547gctw.streamlit.app)**
 
 </div>
