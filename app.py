@@ -179,5 +179,12 @@ No pretrained weights. No `nn.MultiheadAttention`. Just PyTorch and math.
     )
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 7860))
-    demo.launch(server_name="0.0.0.0", server_port=port, share=False, show_error=True)
+    # Render injects PORT=10000 by default.
+    # Must bind to 0.0.0.0 so Render's proxy can reach the app.
+    port = int(os.environ.get("PORT", 10000))
+    demo.launch(
+        server_name="0.0.0.0",
+        server_port=port,
+        show_error=True,
+        root_path=os.environ.get("RENDER_EXTERNAL_URL", ""),
+    )
