@@ -120,14 +120,21 @@ def load_model():
     global model, tokenizer
 
     from src.tokenizer import BPETokenizer
-    from src.model import MiniGPT
+    from src.model import MiniGPT, GPTConfig
 
     try:
         tokenizer = BPETokenizer()
         tokenizer.load(TOKENIZER_PATH)
 
         ckpt = torch.load(CHECKPOINT_PATH, map_location=device, weights_only=False)
-        cfg  = ckpt["config"]
+
+        # Config may be stored as a dataclass or dict — handle both
+        cfg_raw = ckpt["config"]
+        if isinstance(cfg_raw, dict):
+            cfg = GPTConfig(**cfg_raw)
+        else:
+            cfg = cfg_raw  # already a GPTConfig dataclass
+
         model = MiniGPT(cfg).to(device)
         model.load_state_dict(ckpt["model_state_dict"])
         model.eval()
@@ -143,6 +150,7 @@ def load_model():
 
 bootstrap()
 loaded, status_msg = load_model()
+status_msg = str(status_msg)  # ensure plain string, never a dataclass
 print(status_msg)
 
 
@@ -228,9 +236,8 @@ causal self-attention implemented manually, trained on Shakespeare's complete wo
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    # share=True creates a public gradio.live link (works everywhere, 72h)
-    # On platforms like Render that set PORT, it also binds to 0.0.0.0
+    # Use 7860 locally (gradio default), 10000 on Render
+    port = int(os.environ.get("PORT", 7860))
     demo.launch(
         server_name="0.0.0.0",
         server_port=port,
