@@ -2,9 +2,10 @@ services:
   - type: web
     name: minigpt-shakespeare
     runtime: python
-    buildCommand: pip install -r render_requirements.txt
-    startCommand: python app.py
+    pythonVersion: "3.11.9"
+    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
+    startCommand: "python app.py"
+    plan: free
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.9
-    plan: free
+        value: "3.11.9"
