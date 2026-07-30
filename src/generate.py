@@ -55,7 +55,7 @@ def load_model_and_tokenizer(checkpoint_path: str, tokenizer_path: str, device: 
     tokenizer.load(tokenizer_path)
 
     # Load checkpoint
-    ckpt = torch.load(checkpoint_path, map_location=device)
+    ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
 
     # Reconstruct config from checkpoint
     config: GPTConfig = ckpt["config"]

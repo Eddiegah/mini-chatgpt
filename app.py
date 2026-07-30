@@ -53,7 +53,7 @@ def load_model():
         tokenizer = BPETokenizer()
         tokenizer.load(TOKENIZER_PATH)
 
-        ckpt = torch.load(CHECKPOINT_PATH, map_location=device)
+        ckpt = torch.load(CHECKPOINT_PATH, map_location=device, weights_only=False)
         config = ckpt["config"]
         model = MiniGPT(config).to(device)
         model.load_state_dict(ckpt["model_state_dict"])
