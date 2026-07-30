@@ -18,17 +18,15 @@ import gradio as gr
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# ── ZeroGPU support (only active on HF Spaces) ───────────────────────────
+# ── ZeroGPU support (only active on HF Spaces, not on Render) ────────────
 try:
     import spaces
-    ZERO_GPU = True
+    @spaces.GPU
+    def _gpu_wrapper(fn):
+        return fn
+    USE_ZERO_GPU = True
 except ImportError:
-    ZERO_GPU = False
-    # Dummy decorator for local use
-    class spaces:
-        @staticmethod
-        def GPU(fn):
-            return fn
+    USE_ZERO_GPU = False
 
 CHECKPOINT_PATH = "results/checkpoints/best_model.pt"
 TOKENIZER_PATH = "data/tokenizer.json"
@@ -67,7 +65,6 @@ def load_model():
         return False, f"Error: {e}"
 
 
-@spaces.GPU
 def generate(prompt: str, max_new_tokens: int, temperature: float, top_k: int, strategy: str) -> str:
     if model is None or tokenizer is None:
         return "⚠️ Model not loaded."
