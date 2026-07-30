@@ -1,69 +1,53 @@
 """
-deploy_to_hf.py — One-shot deploy to Hugging Face Spaces.
+deploy_to_hf.py — Deploy to Hugging Face Spaces (ZeroGPU — free tier).
 
-Run this AFTER training is complete (best_model.pt must exist).
+ZeroGPU is Hugging Face's free shared GPU tier.
+Free accounts get up to 2 Gradio Spaces on ZeroGPU at no cost.
 
 Usage:
     python deploy_to_hf.py --token YOUR_HF_TOKEN
 
-Get your token at: https://huggingface.co/settings/tokens
-Create one with WRITE access.
-
-This script will:
-  1. Authenticate with Hugging Face
-  2. Create the Space 'minigpt-shakespeare' under your account (if it doesn't exist)
-  3. Upload all required files (app, src, tokenizer, model checkpoint)
-  4. Print the live public URL
+Get your token: https://huggingface.co/settings/tokens (Write access)
 """
 
 import argparse
 import os
 import sys
 
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--token", required=True, help="Your Hugging Face write token")
-    parser.add_argument("--repo-name", default="minigpt-shakespeare", help="Space name (default: minigpt-shakespeare)")
+    parser.add_argument("--token", required=True, help="HuggingFace write token")
+    parser.add_argument("--repo-name", default="minigpt-shakespeare")
     args = parser.parse_args()
 
-    token = args.token
-    repo_name = args.repo_name
-
     try:
-        from huggingface_hub import HfApi, SpaceStage
+        from huggingface_hub import HfApi
     except ImportError:
-        print("huggingface_hub not installed. Run: pip install huggingface_hub")
-        sys.exit(1)
+        print("Run: pip install huggingface_hub"); sys.exit(1)
 
-    api = HfApi(token=token)
+    api = HfApi(token=args.token)
 
-    # Get username
+    # Verify login
     try:
-        user_info = api.whoami()
-        username = user_info["name"]
+        user = api.whoami()
+        username = user["name"]
         print(f"Logged in as: {username}")
     except Exception as e:
-        print(f"Login failed. Check your token.\nError: {e}")
-        sys.exit(1)
+        print(f"Login failed: {e}"); sys.exit(1)
 
-    repo_id = f"{username}/{repo_name}"
+    repo_id = f"{username}/{args.repo_name}"
 
-    # Check required files
-    required = [
-        "results/checkpoints/best_model.pt",
-        "data/tokenizer.json",
-    ]
+    # Check required files exist
+    required = ["results/checkpoints/best_model.pt", "data/tokenizer.json"]
     missing = [f for f in required if not os.path.exists(f)]
     if missing:
-        print(f"\nMissing files (run training first):")
-        for f in missing:
-            print(f"  {f}")
-        print("\nRun: python src/train.py")
-        sys.exit(1)
+        print("Missing files:", missing)
+        print("Run: python src/train_demo.py"); sys.exit(1)
 
-    print(f"\nCreating/updating Space: {repo_id}")
+    print(f"\nCreating Space: {repo_id} (ZeroGPU — free)")
 
-    # Create the Space if it doesn't exist
+    # Create Space with ZeroGPU hardware
     try:
         api.create_repo(
             repo_id=repo_id,
@@ -72,20 +56,28 @@ def main():
             private=False,
             exist_ok=True,
         )
-        print(f"Space ready at: https://huggingface.co/spaces/{repo_id}")
+        # Set to ZeroGPU hardware (free)
+        try:
+            api.request_space_hardware(
+                repo_id=repo_id,
+                hardware="zero-a10g",   # ZeroGPU — free shared GPU
+            )
+            print("Hardware set to ZeroGPU (free shared GPU)")
+        except Exception:
+            print("Note: ZeroGPU hardware request skipped (may already be set or unavailable)")
+
+        print(f"Space: https://huggingface.co/spaces/{repo_id}")
     except Exception as e:
         print(f"Error creating Space: {e}")
+        print("\nIf you see a payment error, ZeroGPU may not be available for your account yet.")
+        print("Alternative: use 'python app.py' locally, or share via 'gradio share'")
         sys.exit(1)
 
-    # Files to upload: (local_path, path_in_repo)
-    files_to_upload = [
-        # App entry point
+    # Files to upload
+    files = [
         ("app.py", "app.py"),
-        # Space README (with HF front-matter)
         ("README_SPACES.md", "README.md"),
-        # Requirements (space-specific, no matplotlib/tqdm)
         ("space_requirements.txt", "requirements.txt"),
-        # Source code
         ("src/__init__.py", "src/__init__.py"),
         ("src/tokenizer.py", "src/tokenizer.py"),
         ("src/embeddings.py", "src/embeddings.py"),
@@ -93,30 +85,27 @@ def main():
         ("src/transformer_block.py", "src/transformer_block.py"),
         ("src/model.py", "src/model.py"),
         ("src/generate.py", "src/generate.py"),
-        # Trained artifacts
         ("data/tokenizer.json", "data/tokenizer.json"),
         ("results/checkpoints/best_model.pt", "results/checkpoints/best_model.pt"),
     ]
 
-    print(f"\nUploading {len(files_to_upload)} files...")
-
-    for local_path, repo_path in files_to_upload:
-        if not os.path.exists(local_path):
-            print(f"  SKIP (not found): {local_path}")
+    print(f"\nUploading {len(files)} files...")
+    for local, remote in files:
+        if not os.path.exists(local):
+            print(f"  SKIP: {local}")
             continue
-        size_mb = os.path.getsize(local_path) / 1024 / 1024
-        print(f"  Uploading {local_path} ({size_mb:.1f} MB)...", end=" ", flush=True)
+        size = os.path.getsize(local) / 1024 / 1024
+        print(f"  {local} ({size:.1f} MB)...", end=" ", flush=True)
         try:
             api.upload_file(
-                path_or_fileobj=local_path,
-                path_in_repo=repo_path,
+                path_or_fileobj=local,
+                path_in_repo=remote,
                 repo_id=repo_id,
                 repo_type="space",
             )
-            print("done")
+            print("✓")
         except Exception as e:
-            print(f"FAILED: {e}")
-            sys.exit(1)
+            print(f"FAILED: {e}"); sys.exit(1)
 
     print(f"""
 {'='*60}
@@ -124,9 +113,8 @@ def main():
 {'='*60}
   Live URL: https://huggingface.co/spaces/{repo_id}
 
-  The Space is building now (takes ~2-3 min on first deploy).
-  Open the URL above — once the build finishes you'll see
-  the Gradio interface.
+  The Space is building (~2-3 min on first deploy).
+  Open the URL above once the build finishes.
 {'='*60}
 """)
 
